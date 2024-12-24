@@ -1,0 +1,54 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(10, 40px);
+  grid-template-rows: repeat(10, 40px);
+  grid-gap: 2px;
+  width: 500px;
+  height: 500px;
+  position: relative;
+}
+
+.cell {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ccc;
+  font-size: 16px;
+  background-color: #f0f0f0;
+  box-sizing: border-box;
+}
+
+.cell.mine {
+  background-color: #ffdddd;
+}
+
+.cell.start {
+  background-color: #d1ffd1;
+}
+
+.cell.end {
+  background-color: #d1d1ff;
+}
+
+.cell.player {
+  border: dodgerblue solid thick;
+  font-weight: bold;
+}
+
+.cell.hidden {
+  background-color: #999;
+  color: transparent;
+  cursor: pointer;
+}
+
+.cell.flagged {
+  background-color: #ffd1d1;
+  color: red;
+  font-weight: bold;
+}
+
+.cell.hidden:hover {
+  background-color: #bbb;
+}
