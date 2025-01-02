@@ -12,10 +12,81 @@ const generateGrid = () => {
     );
 
     // Set start and end positions
-    grid[0][0].start = true;
-    grid[0][0].revealed = true;
-    grid[GRID_SIZE - 1][GRID_SIZE - 1].end = true;
-    grid[GRID_SIZE - 1][GRID_SIZE - 1].revealed = true;
+    const start = {x:0, y:0};
+    const end = {x:GRID_SIZE - 1, y:GRID_SIZE - 1};
+
+    grid[start.x][start.y].start = true;
+    grid[start.x][start.y].revealed = true;
+    grid[end.x][end.y].end = true;
+    grid[end.x][end.y].revealed = true;
+
+    // Find path
+    const directions = [
+        { dx: -1, dy: 0 }, // Up
+        { dx: 1, dy: 0 },  // Down
+        { dx: 0, dy: -1 }, // Left
+        { dx: 0, dy: 1 },  // Right
+    ];
+
+    const max_length = 35;
+    const min_length = 25;
+
+    const path = [];
+    const visited = new Set(); // Track visited cells
+    const targetLength = Math.floor(Math.random() * (max_length - min_length + 1)) + min_length;
+
+    const isValidMove = (x, y) =>
+        x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE && !visited.has(`${x},${y}`);
+
+    const heuristicDistance = (x, y) =>
+        Math.abs(x - end.x) + Math.abs(y - end.y);
+
+    const stack = [{ x: start.x, y: start.y, length: 0 }];
+    visited.add(`${start.x},${start.y}`);
+
+    let iters = 0; // todo remove
+    while (stack.length > 0) {
+        ++iters;
+        if (iters > 10000) {
+            console.log("maximum iterations reached, possible infinite loop");
+            break;
+        }
+
+        const { x, y, length } = stack.pop();
+        visited.add(`${x},${y}`);
+
+        path.push({ x, y });
+
+        // Stop if we reach the end square within the target length
+        if (x === end.x && y === end.y && length >= min_length && length <= max_length) {
+            break;
+        }
+
+        // Shuffle directions for randomness
+        const shuffledDirections = directions
+            .map((dir) => ({
+                ...dir,
+                priority: heuristicDistance(x + dir.dx, y + dir.dy),
+            }))
+            .sort(() => Math.random() - 0.5); // Randomize within same heuristic
+
+        for (const { dx, dy } of shuffledDirections) {
+            const newX = x + dx;
+            const newY = y + dy;
+
+            if (isValidMove(newX, newY)) {
+                stack.push({ x: newX, y: newY, length: length + 1 });
+            }
+        }
+
+        // Backtrack if necessary
+        if (stack.length === 0 || length + heuristicDistance(x,y) > targetLength) {
+            visited.delete(`${x},${y}`);
+            path.pop();
+        }
+    }
+
+    console.log(path);
 
     // Place mines
     let minesPlaced = 0;
@@ -24,7 +95,10 @@ const generateGrid = () => {
         if (grid[x][y].start || grid[x][y].end) {
             return false;
         }
-        return !(x + y === 1 || (x === 1 && y === 1));
+        if (Math.abs(x-start.x) === 1 || Math.abs(y - start.y) === 1) {
+            return false;
+        }
+        return !path.includes(`${x},${y}`);
     }
 
     while (minesPlaced < NUM_MINES) {
@@ -57,7 +131,7 @@ const generateGrid = () => {
     grid[0][1].revealed = true;
     grid[1][1].revealed = true;
 
-    console.log(grid);
+    // console.log(grid);
     return grid;
 };
 
