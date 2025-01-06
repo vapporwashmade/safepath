@@ -5,6 +5,7 @@ const GRID_SIZE = 10;
 const NUM_MINES = 15;
 
 const generateGrid = () => {
+    console.log("generate grid called");
     const grid = Array.from({length: GRID_SIZE}, () =>
         Array.from({length: GRID_SIZE}, () => ({
             mine: false, number: 0, revealed: false, flagged: false
@@ -12,8 +13,8 @@ const generateGrid = () => {
     );
 
     // Set start and end positions
-    const start = {x:0, y:0};
-    const end = {x:GRID_SIZE - 1, y:GRID_SIZE - 1};
+    const start = {x: 0, y: 0};
+    const end = {x: GRID_SIZE - 1, y: GRID_SIZE - 1};
 
     grid[start.x][start.y].start = true;
     grid[start.x][start.y].revealed = true;
@@ -22,10 +23,10 @@ const generateGrid = () => {
 
     // Find path
     const directions = [
-        { dx: -1, dy: 0 }, // Up
-        { dx: 1, dy: 0 },  // Down
-        { dx: 0, dy: -1 }, // Left
-        { dx: 0, dy: 1 },  // Right
+        {dx: -1, dy: 0}, // Up
+        {dx: 1, dy: 0},  // Down
+        {dx: 0, dy: -1}, // Left
+        {dx: 0, dy: 1},  // Right
     ];
 
     const max_length = 35;
@@ -41,52 +42,67 @@ const generateGrid = () => {
     const heuristicDistance = (x, y) =>
         Math.abs(x - end.x) + Math.abs(y - end.y);
 
-    const stack = [{ x: start.x, y: start.y, length: 0 }];
+    const stack = [{x: start.x, y: start.y, length: 0}];
     visited.add(`${start.x},${start.y}`);
 
-    let iters = 0; // todo remove
+    let iters = 0;
     while (stack.length > 0) {
+        // infinte loop failsafe
         ++iters;
         if (iters > 10000) {
             console.log("maximum iterations reached, possible infinite loop");
             break;
         }
 
-        const { x, y, length } = stack.pop();
-        visited.add(`${x},${y}`);
-
-        path.push({ x, y });
-
-        // Stop if we reach the end square within the target length
-        if (x === end.x && y === end.y && length >= min_length && length <= max_length) {
-            break;
-        }
-
-        // Shuffle directions for randomness
-        const shuffledDirections = directions
-            .map((dir) => ({
-                ...dir,
-                priority: heuristicDistance(x + dir.dx, y + dir.dy),
-            }))
-            .sort(() => Math.random() - 0.5); // Randomize within same heuristic
-
-        for (const { dx, dy } of shuffledDirections) {
-            const newX = x + dx;
-            const newY = y + dy;
-
-            if (isValidMove(newX, newY)) {
-                stack.push({ x: newX, y: newY, length: length + 1 });
-            }
-        }
+        const {x, y, length} = stack.pop();
 
         // Backtrack if necessary
-        if (stack.length === 0 || length + heuristicDistance(x,y) > targetLength) {
-            visited.delete(`${x},${y}`);
-            path.pop();
+        if (!(length + heuristicDistance(x, y) > targetLength)) {
+            path[length] = {x:x, y:y};
+            visited.add(`${x},${y}`);
+
+            // Stop if we reach the end square within the target length
+            if (x === end.x && y === end.y && length === targetLength) {
+                break;
+            }
+
+            // Shuffle directions for randomness
+            let shuffledDirections = [...directions];
+
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            shuffleArray(shuffledDirections);
+
+            for (const {dx, dy} of shuffledDirections) {
+                const newX = x + dx;
+                const newY = y + dy;
+
+                if (isValidMove(newX, newY)) {
+                    stack.push({x: newX, y: newY, length: length + 1});
+                }
+            }
+        }
+        if (stack.length > 0) {
+            let diff = length - stack[stack.length - 1].length;
+            for (let i = 0; i < diff; i++) {
+                const r = path.pop();
+                visited.delete(`${r.x},${r.y}`);
+            }
         }
     }
 
     console.log(path);
+
+    // EXTRA for debugging
+    for (const pt of path) {
+        grid[pt.x][pt.y].path = true;
+    }
 
     // Place mines
     let minesPlaced = 0;
@@ -95,10 +111,15 @@ const generateGrid = () => {
         if (grid[x][y].start || grid[x][y].end) {
             return false;
         }
-        if (Math.abs(x-start.x) === 1 || Math.abs(y - start.y) === 1) {
+        if (Math.abs(x - start.x) === 1 || Math.abs(y - start.y) === 1) {
             return false;
         }
-        return !path.includes(`${x},${y}`);
+        for (let i = 0; i < path.length; i++) {
+            if (x === path[i].x && y === path[i].y) {
+                return false;
+            }
+        }
+        return true;
     }
 
     while (minesPlaced < NUM_MINES) {
@@ -131,12 +152,12 @@ const generateGrid = () => {
     grid[0][1].revealed = true;
     grid[1][1].revealed = true;
 
-    // console.log(grid);
+    console.log(grid);
     return grid;
 };
 
 const App = () => {
-    const [grid, setGrid] = useState(generateGrid());
+    const [grid, setGrid] = useState(generateGrid);
     const [playerPosition, setPlayerPosition] = useState({
         x: 0,
         y: 0,
@@ -170,6 +191,14 @@ const App = () => {
         });
     };
 
+    function revealAll() {
+        for (const row of grid) {
+            for (const cell of row) {
+                cell.revealed = true;
+            }
+        }
+    }
+
     const movePlayer = (dx, dy, shiftKey) => {
         if (gameOver || gameWon) {
             return;
@@ -197,11 +226,13 @@ const App = () => {
         if (grid[newX][newY].mine) {
             setGameOver(true);
             alert("Game Over!");
+            revealAll();
         }
 
         if (grid[newX][newY].end) {
             setGameWon(true);
             alert("Congratulations, you win!");
+            revealAll();
         }
     };
 
@@ -266,7 +297,9 @@ const App = () => {
                                     : cell.revealed
                                         ? cell.mine
                                             ? "mine"
-                                            : ""
+                                            : cell.path
+                                                ? "path-part"
+                                                : ""
                                         : "hidden"
                     } ${isPlayer ? "player" : ""}`;
                     return (
