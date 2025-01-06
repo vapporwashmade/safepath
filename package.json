@@ -1,6 +1,7 @@
 {
-  "name": "rhythm",
+  "name": "safepath",
   "version": "0.1.0",
+  "homepage": "https://vapporwashmade.github.io/safepath",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.13.3",
@@ -38,5 +39,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   }
 }
