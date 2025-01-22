@@ -1,20 +1,20 @@
 import './App.css';
 import {useEffect, useState} from 'react'
 
-const GRID_SIZE = 10;
-const NUM_MINES = 15;
+const generateGrid = (grid_size) => {
+    // 20% mines
+    const num_mines = Math.floor(0.2 * grid_size * grid_size);
 
-const generateGrid = () => {
     console.log("generate grid called");
-    const grid = Array.from({length: GRID_SIZE}, () =>
-        Array.from({length: GRID_SIZE}, () => ({
+    const grid = Array.from({length: grid_size}, () =>
+        Array.from({length: grid_size}, () => ({
             mine: false, number: 0, revealed: false, flagged: false
         }))
     );
 
     // Set start and end positions
     const start = {x: 0, y: 0};
-    const end = {x: GRID_SIZE - 1, y: GRID_SIZE - 1};
+    const end = {x: grid_size - 1, y: grid_size - 1};
 
     grid[start.x][start.y].start = true;
     grid[start.x][start.y].revealed = true;
@@ -22,87 +22,68 @@ const generateGrid = () => {
     grid[end.x][end.y].revealed = true;
 
     // Find path
+
+    const targetLength = Math.floor(
+        Math.random() * (3.5 * grid_size - 2.5 * grid_size + 1) + 2.5 * grid_size
+    );
+
     const directions = [
-        {dx: -1, dy: 0}, // Up
-        {dx: 1, dy: 0},  // Down
-        {dx: 0, dy: -1}, // Left
-        {dx: 0, dy: 1},  // Right
+        { dx: -1, dy: 0 }, // Up
+        { dx: 1, dy: 0 },  // Down
+        { dx: 0, dy: -1 }, // Left
+        { dx: 0, dy: 1 },  // Right
     ];
 
-    const max_length = 35;
-    const min_length = 25;
-
+    const visited = new Set();
     const path = [];
-    const visited = new Set(); // Track visited cells
-    const targetLength = Math.floor(Math.random() * (max_length - min_length + 1)) + min_length;
 
     const isValidMove = (x, y) =>
-        x >= 0 && y >= 0 && x < GRID_SIZE && y < GRID_SIZE && !visited.has(`${x},${y}`);
+        x >= 0 && y >= 0 && x < grid_size && y < grid_size && !visited.has(`${x},${y}`);
 
     const heuristicDistance = (x, y) =>
         Math.abs(x - end.x) + Math.abs(y - end.y);
 
-    const stack = [{x: start.x, y: start.y, length: 0}];
-    visited.add(`${start.x},${start.y}`);
-
     let iters = 0;
-    while (stack.length > 0) {
-        // infinte loop failsafe
-        ++iters;
-        if (iters > 10000) {
-            console.log("maximum iterations reached, possible infinite loop");
-            break;
+
+    const dfs = (x, y, length, iters) => {
+
+        if (x === end.x && y === end.y && length === targetLength) {
+            path.push({ x, y });
+            return true; // Path found
         }
 
-        const {x, y, length} = stack.pop();
+        if (length + heuristicDistance(x, y) > targetLength) return false; // Exceeded path length
 
-        // Backtrack if necessary
-        if (!(length + heuristicDistance(x, y) > targetLength)) {
-            path[length] = {x:x, y:y};
-            visited.add(`${x},${y}`);
+        visited.add(`${x},${y}`);
+        path.push({ x, y });
 
-            // Stop if we reach the end square within the target length
-            if (x === end.x && y === end.y && length === targetLength) {
-                break;
-            }
+        // Shuffle directions for randomness
+        const shuffledDirections = directions.sort(() => Math.random() - 0.5);
 
-            // Shuffle directions for randomness
-            let shuffledDirections = [...directions];
+        for (const { dx, dy } of shuffledDirections) {
+            const newX = x + dx;
+            const newY = y + dy;
 
-            function shuffleArray(array) {
-                for (let i = array.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [array[i], array[j]] = [array[j], array[i]];
-                }
-                return array;
-            }
-
-            shuffleArray(shuffledDirections);
-
-            for (const {dx, dy} of shuffledDirections) {
-                const newX = x + dx;
-                const newY = y + dy;
-
-                if (isValidMove(newX, newY)) {
-                    stack.push({x: newX, y: newY, length: length + 1});
-                }
+            if (isValidMove(newX, newY)) {
+                if (dfs(newX, newY, length + 1, iters + 1)) return true;
             }
         }
-        if (stack.length > 0) {
-            let diff = length - stack[stack.length - 1].length;
-            for (let i = 0; i < diff; i++) {
-                const r = path.pop();
-                visited.delete(`${r.x},${r.y}`);
-            }
-        }
-    }
+
+        // Backtrack if no valid path is found
+        path.pop();
+        visited.delete(`${x},${y}`);
+        return false;
+    };
+
+    dfs(start.x, start.y, 0, 0);
 
     console.log(path);
 
     // EXTRA for debugging
-    for (const pt of path) {
-        grid[pt.x][pt.y].path = true;
-    }
+    // for (const pt of path) {
+    //     // grid[pt.x][pt.y].path = true;
+    //     grid[pt[0]][pt[2]].path = true;
+    // }
 
     // Place mines
     let minesPlaced = 0;
@@ -114,17 +95,17 @@ const generateGrid = () => {
         if (Math.abs(x - start.x) === 1 || Math.abs(y - start.y) === 1) {
             return false;
         }
-        for (let i = 0; i < path.length; i++) {
-            if (x === path[i].x && y === path[i].y) {
-                return false;
-            }
-        }
-        return true;
+        // for (let i = 0; i < path.length; i++) {
+        //     if (x === path[i].x && y === path[i].y) {
+        //         return false;
+        //     }
+        // }
+        return !path.includes(`${x},${y}`);
     }
 
-    while (minesPlaced < NUM_MINES) {
-        const x = Math.floor(Math.random() * GRID_SIZE);
-        const y = Math.floor(Math.random() * GRID_SIZE);
+    while (minesPlaced < num_mines) {
+        const x = Math.floor(Math.random() * grid_size);
+        const y = Math.floor(Math.random() * grid_size);
         if (!grid[x][y].mine && validSquare(x, y)) {
             grid[x][y].mine = true;
             minesPlaced++;
@@ -136,8 +117,8 @@ const generateGrid = () => {
                     if (
                         nx >= 0 &&
                         ny >= 0 &&
-                        nx < GRID_SIZE &&
-                        ny < GRID_SIZE &&
+                        nx < grid_size &&
+                        ny < grid_size &&
                         !grid[nx][ny].mine
                     ) {
                         grid[nx][ny].number++;
@@ -156,14 +137,37 @@ const generateGrid = () => {
     return grid;
 };
 
+const Overlay = ({message, onHide}) => {
+    useEffect(() => {
+        const timer = setTimeout(onHide, 3000); // Hide after 3 seconds
+        return () => clearTimeout(timer);
+    }, [onHide]);
+
+    return (
+        <div className="overlay">
+            <div className="overlay-content">{message}</div>
+        </div>
+    );
+};
 const App = () => {
-    const [grid, setGrid] = useState(generateGrid);
-    const [playerPosition, setPlayerPosition] = useState({
-        x: 0,
-        y: 0,
+    const [gridSize, setGridSize] = useState(16); // Default to medium (16x16)
+    const [grid, setGrid] = useState(() => {
+        return generateGrid(gridSize);
     });
+    const [playerPosition, setPlayerPosition] = useState({x: 0, y: 0});
     const [gameOver, setGameOver] = useState(false);
     const [gameWon, setGameWon] = useState(false);
+    const [gameLost, setGameLost] = useState(false);
+
+    const handleDifficultyChange = (size) => {
+        setGridSize(size);
+        document.documentElement.style.setProperty('--grid-size', size);
+        setGrid(generateGrid(size)); // Regenerate grid with new size
+        setPlayerPosition({x: 0, y: 0}); // Reset player position
+        setGameOver(false);
+        setGameWon(false);
+        setGameLost(false);
+    };
 
     const revealSquare = (x, y) => {
         setGrid((prevGrid) => {
@@ -200,48 +204,43 @@ const App = () => {
     }
 
     const movePlayer = (dx, dy, shiftKey) => {
-        if (gameOver || gameWon) {
+        if (gameOver) {
             return;
         }
 
         const newX = playerPosition.x + dx;
         const newY = playerPosition.y + dy;
 
-        if (newX >= 0 && newY >= 0 && newX < GRID_SIZE && newY < GRID_SIZE) {
+        if (newX >= 0 && newY >= 0 && newX < gridSize && newY < gridSize) {
             if (shiftKey) {
                 toggleFlag(newX, newY);
-                console.log(newX + ',' + newY + " is now flagged");
                 return;
             } else if (grid[newX][newY].flagged) {
-                console.log("preventing move to flagged square " + newX + ',' + newY);
                 return;
             } else {
                 setPlayerPosition({x: newX, y: newY});
                 revealSquare(newX, newY);
             }
-        } else {
-            return;
-        }
 
-        if (grid[newX][newY].mine) {
-            setGameOver(true);
-            alert("Game Over!");
-            revealAll();
-        }
 
-        if (grid[newX][newY].end) {
-            setGameWon(true);
-            alert("Congratulations, you win!");
-            revealAll();
+            if (grid[newX][newY].mine) {
+                setGameOver(true);
+                setGameLost(true);
+                revealAll();
+            }
+
+            if (grid[newX][newY].end) {
+                setGameOver(true);
+                setGameWon(true);
+                revealAll();
+            }
         }
     };
 
     const handleKeyDown = (e) => {
         const shiftKey = e.shiftKey;
-        console.log("event occurred, key " + e.key + " with shift? " + e.shiftKey);
 
-        // prevent defaults
-        if (["w", "a", "s", "d", "W", "A", "S", "D"].includes(e.key)) {
+        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"].includes(e.key)) {
             e.preventDefault();
         }
 
@@ -283,166 +282,237 @@ const App = () => {
     }, [playerPosition.x, playerPosition.y]);
 
     return (
-        <div className="grid">
-            {grid.map((row, x) =>
-                row.map((cell, y) => {
-                    const isPlayer = playerPosition.x === x && playerPosition.y === y;
-                    const className = `cell ${
-                        cell.start
-                            ? "start"
-                            : cell.end
-                                ? "end"
-                                : cell.flagged
-                                    ? "flagged"
+        <div className="app-cont">
+            <div className="difficulty-buttons">
+                <button onClick={() => handleDifficultyChange(10)}>Easy (10x10)</button>
+                <button onClick={() => handleDifficultyChange(16)}>Medium (16x16)</button>
+                <button onClick={() => handleDifficultyChange(24)}>Hard (24x24)</button>
+            </div>
+            <div className="grid">
+                {grid.map((row, x) =>
+                    row.map((cell, y) => {
+                        const isPlayer = playerPosition.x === x && playerPosition.y === y;
+                        const className = `cell ${
+                            cell.start
+                                ? "start"
+                                : cell.end
+                                    ? "end"
+                                    : cell.flagged
+                                        ? "flagged"
+                                        : cell.revealed
+                                            ? cell.mine
+                                                ? "mine"
+                                                : cell.path
+                                                    ? "path-part"
+                                                    : ""
+                                            : "hidden"
+                        } ${isPlayer ? "player" : ""}`;
+                        return (
+                            <div key={`${x}-${y}`} className={className}>
+                                {cell.flagged
+                                    ? "🚩"
                                     : cell.revealed
                                         ? cell.mine
-                                            ? "mine"
-                                            : cell.path
-                                                ? "path-part"
-                                                : ""
-                                        : "hidden"
-                    } ${isPlayer ? "player" : ""}`;
-                    return (
-                        <div key={`${x}-${y}`} className={className}>
-                            {cell.flagged
-                                ? "🚩"
-                                : cell.revealed
-                                    ? cell.mine
-                                        ? "💣"
-                                        : cell.start
-                                            ? "S"
-                                            : cell.end
-                                                ? "E"
-                                                : cell.number > 0
-                                                    ? cell.number
-                                                    : ""
-                                    : ""}
-                        </div>
-                    );
-                })
+                                            ? "💣"
+                                            : cell.start
+                                                ? "S"
+                                                : cell.end
+                                                    ? "E"
+                                                    : cell.number > 0
+                                                        ? cell.number
+                                                        : ""
+                                        : ""}
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+            {gameLost && (
+                <Overlay message="Game Over!" onHide={() => setGameLost(false)}/>
+            )}
+            {gameWon && (
+                <Overlay message="Congratulations, You Win!" onHide={() => setGameWon(false)}/>
             )}
         </div>
     );
 };
 
-// ------ OLD GENERATE GRID BELOW --------
-// const generateGrid = (rows, cols, mines) => {
-//     const grid = Array(rows)
-//         .fill(null)
-//         .map(() =>
-//             Array(cols)
-//                 .fill(null)
-//                 .map(() => ({ isMine: false, isRevealed: false, neighborMines: 0 }))
-//         );
+// const App = () => {
+//     const grid_size = 16;
+//     const [grid, setGrid] = useState(generateGrid(grid_size));
+//     const [playerPosition, setPlayerPosition] = useState({
+//         x: 0,
+//         y: 0,
+//     });
+//     const [gameOver, setGameOver] = useState(false);
+//     const [gameWon, setGameWon] = useState(false);
 //
-//     // Place mines randomly
-//     let mineCount = 0;
-//     while (mineCount < mines) {
-//         const row = Math.floor(Math.random() * rows);
-//         const col = Math.floor(Math.random() * cols);
 //
-//         if (!grid[row][col].isMine) {
-//             grid[row][col].isMine = true;
-//             mineCount++;
-//         }
-//     }
-//
-//     // Calculate neighbor mines
-//     for (let r = 0; r < rows; r++) {
-//         for (let c = 0; c < cols; c++) {
-//             if (!grid[r][c].isMine) {
-//                 let count = 0;
-//                 for (let i = -1; i <= 1; i++) {
-//                     for (let j = -1; j <= 1; j++) {
-//                         if (r + i >= 0 && r + i < rows && c + j >= 0 && c + j < cols) {
-//                             if (grid[r + i][c + j].isMine) {
-//                                 count++;
-//                             }
-//                         }
+//     const revealSquare = (x, y) => {
+//         setGrid((prevGrid) => {
+//             return prevGrid.map((row, rowIndex) =>
+//                 row.map((cell, colIndex) => {
+//                     if (rowIndex === x && colIndex === y) {
+//                         return {...cell, revealed: true}; // Return a new object with updated state
 //                     }
-//                 }
-//                 grid[r][c].neighborMines = count;
+//                     return cell;
+//                 })
+//             );
+//         });
+//     };
+//
+//     const toggleFlag = (x, y) => {
+//         setGrid((prevGrid) => {
+//             return prevGrid.map((row, rowIndex) =>
+//                 row.map((cell, colIndex) => {
+//                     if (rowIndex === x && colIndex === y) {
+//                         return {...cell, flagged: !cell.flagged}; // Toggle flagged state
+//                     }
+//                     return cell;
+//                 })
+//             );
+//         });
+//     };
+//
+//     function revealAll() {
+//         for (const row of grid) {
+//             for (const cell of row) {
+//                 cell.revealed = true;
 //             }
 //         }
 //     }
 //
-//     return grid;
-// };
-
-
-// ---- OLD GAME BELOW -------
-// const Game = ({ rows, cols, mines }) => {
-//     const [grid, setGrid] = useState([]);
-//     const [gameOver, setGameOver] = useState(false);
-//
-//     useEffect(() => {
-//         setGrid(generateGrid(rows, cols, mines));
-//     }, [rows, cols, mines]);
-//
-//     const handleClick = (row, col) => {
-//         if (grid[row][col].isMine) {
-//             setGameOver(true);
-//             alert("Game Over!");
+//     const movePlayer = (dx, dy, shiftKey) => {
+//         if (gameOver || gameWon) {
 //             return;
 //         }
 //
-//         // Reveal cell
-//         const newGrid = [...grid];
-//         newGrid[row][col].isRevealed = true;
+//         const newX = playerPosition.x + dx;
+//         const newY = playerPosition.y + dy;
 //
-//         function rippleReveal(row, col) {
-//             newGrid[row][col].isRevealed = true;
-//
-//             if (grid[row][col].neighborMines > 0 || revgrid[row][col] === true) {
+//         if (newX >= 0 && newY >= 0 && newX < grid_size && newY < grid_size) {
+//             if (shiftKey) {
+//                 toggleFlag(newX, newY);
+//                 console.log(newX + ',' + newY + " is now flagged");
 //                 return;
+//             } else if (grid[newX][newY].flagged) {
+//                 console.log("preventing move to flagged square " + newX + ',' + newY);
+//                 return;
+//             } else {
+//                 setPlayerPosition({x: newX, y: newY});
+//                 revealSquare(newX, newY);
 //             }
-//
-//             revgrid[row][col] = true;
-//
-//             for (let i = -1; i <= 1; i++) {
-//                 for (let j = -1; j <= 1; j++) {
-//                     if (row + i >= 0 && row + i < rows && col + j >= 0 && col + j < cols && (i !== 0 || j !== 0)) {
-//                         rippleReveal(row + i, col + j);
-//                     }
-//                 }
-//             }
+//         } else {
+//             return;
 //         }
 //
-//         const revgrid = Array(rows)
-//             .fill(null)
-//             .map(() =>
-//                 Array(cols)
-//                     .fill(null)
-//                     .map(() => false)
-//             );
-//         rippleReveal(row, col);
+//         if (grid[newX][newY].mine) {
+//             setGameOver(true);
+//             revealAll();
+//         }
 //
-//         setGrid(newGrid);
+//         if (grid[newX][newY].end) {
+//             setGameWon(true);
+//             revealAll();
+//         }
 //     };
 //
+//     const handleKeyDown = (e) => {
+//         const shiftKey = e.shiftKey;
+//         console.log("event occurred, key " + e.key + " with shift? " + e.shiftKey);
+//
+//         // prevent defaults
+//         if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "w", "a", "s", "d", "W", "A", "S", "D"].includes(e.key)) {
+//             e.preventDefault();
+//         }
+//
+//         switch (e.key) {
+//             case "ArrowUp":
+//             case "w":
+//             case "W":
+//                 movePlayer(-1, 0, shiftKey);
+//                 break;
+//             case "ArrowDown":
+//             case "s":
+//             case "S":
+//                 movePlayer(1, 0, shiftKey);
+//                 break;
+//             case "ArrowLeft":
+//             case "a":
+//             case "A":
+//                 movePlayer(0, -1, shiftKey);
+//                 break;
+//             case "ArrowRight":
+//             case "d":
+//             case "D":
+//                 movePlayer(0, 1, shiftKey);
+//                 break;
+//             default:
+//                 break;
+//         }
+//     };
+//
+//     useEffect(() => {
+//         window.addEventListener("keydown", handleKeyDown);
+//         return () => {
+//             window.removeEventListener("keydown", handleKeyDown);
+//         };
+//     }, [handleKeyDown, playerPosition]);
+//
+//     useEffect(() => {
+//         revealSquare(playerPosition.x, playerPosition.y);
+//     }, [playerPosition.x, playerPosition.y]);
+//
 //     return (
-//         <div>
-//             {gameOver && <p>Game Over! Refresh to restart.</p>}
-//             <div className="grid">
-//                 {grid.map((row, rowIndex) => (
-//                     <div className="row" key={rowIndex}>
-//                         {row.map((cell, colIndex) => (
-//                             <button
-//                                 key={colIndex}
-//                                 className={`cell ${cell.isRevealed ? "revealed" : ""}`}
-//                                 onClick={() => handleClick(rowIndex, colIndex)}
-//                                 disabled={cell.isRevealed || gameOver}
-//                             >
-//                                 {cell.isRevealed
-//                                     ? cell.isMine
-//                                         ? "💣"
-//                                         : cell.neighborMines || ""
-//                                     : ""}
-//                             </button>
-//                         ))}
-//                     </div>
-//                 ))}
-//             </div>
+//         <div className="app-cont">
+//             {<div className="grid">
+//                 {grid.map((row, x) =>
+//                     row.map((cell, y) => {
+//                         const isPlayer = playerPosition.x === x && playerPosition.y === y;
+//                         const className = `cell ${
+//                             cell.start
+//                                 ? "start"
+//                                 : cell.end
+//                                     ? "end"
+//                                     : cell.flagged
+//                                         ? "flagged"
+//                                         : cell.revealed
+//                                             ? cell.mine
+//                                                 ? "mine"
+//                                                 : cell.path
+//                                                     ? "path-part"
+//                                                     : ""
+//                                             : "hidden"
+//                         } ${isPlayer ? "player" : ""}`;
+//                         return (
+//                             <div key={`${x}-${y}`} className={className}>
+//                                 {cell.flagged
+//                                     ? "🚩"
+//                                     : cell.revealed
+//                                         ? cell.mine
+//                                             ? "💣"
+//                                             : cell.start
+//                                                 ? "S"
+//                                                 : cell.end
+//                                                     ? "E"
+//                                                     : cell.number > 0
+//                                                         ? cell.number
+//                                                         : ""
+//                                         : ""}
+//                             </div>
+//                         );
+//                     })
+//                 )}
+//             </div>}
+//             {gameOver && (
+//                 <Overlay message="Game Over!" onHide={() => setGameOver(false)} />
+//             )}
+//             {gameWon && (
+//                 <Overlay
+//                     message="Congratulations, You Win!"
+//                     onHide={() => setGameWon(false)}
+//                 />
+//             )}
 //         </div>
 //     );
 // };
